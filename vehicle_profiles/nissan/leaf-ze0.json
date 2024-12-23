@@ -7,7 +7,7 @@
         "pid_init": "ATSH79B;ATFCSH79B;ATCRA7BB;",
         "parameters": [
           {
-            "name": "Hx",
+            "name": "Health",
             "expression": "[B3]*0.5",
             "unit": "%",
             "class": "battery"
