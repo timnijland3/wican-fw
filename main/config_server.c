@@ -108,7 +108,7 @@ static char can_datarate_str[11][7] = {
 								"1000K",
 };
 
-const char device_config_default[] = "{\"wifi_mode\":\"AP\",\"ap_ch\":\"6\",\"sta_ssid\":\"MeatPi\",\"sta_pass\":\"TomatoSauce\",\"can_datarate\":\"500K\",\"can_mode\":\"normal\",\"port_type\":\"tcp\",\"port\":\"3333\",\"ap_pass\":\"@meatpi#\",\"protocol\":\"slcan\",\"ble_pass\":\"123456\",\"ble_status\":\"disable\",\"sleep_status\":\"disable\",\"sleep_volt\":\"13.1\",\"wakeup_volt\":\"13.5\",\"batt_alert\":\"disable\",\"batt_alert_ssid\":\"MeatPi\",\"batt_alert_pass\":\"TomatoSauce\",\"batt_alert_volt\":\"11.0\",\"batt_alert_protocol\":\"mqtt\",\"batt_alert_url\":\"mqtt://mqtt.eclipseprojects.io\",\"batt_alert_port\":\"1883\",\"batt_alert_topic\":\"CAR1/voltage\",\"batt_mqtt_user\":\"meatpi\",\"batt_mqtt_pass\":\"meatpi\",\"batt_alert_time\":\"1\",\"mqtt_en\":\"disable\",\"mqtt_elm327_log\":\"disable\",\"mqtt_url\":\"mqtt://127.0.0.1\",\"mqtt_port\":\"1883\",\"mqtt_user\":\"meatpi\",\"mqtt_pass\":\"meatpi\",\"mqtt_tx_topic\":\"wican/%s/can/tx\",\"mqtt_rx_topic\":\"wican/%s/can/rx\",\"mqtt_status_topic\":\"wican/%s/can/status\"}";
+const char device_config_default[] = "{\"wifi_mode\":\"AP\",\"ap_ch\":\"6\",\"sta_ssid\":\"MeatPi\",\"sta_pass\":\"TomatoSauce\",\"sta_security\":\"wpa3\",\"can_datarate\":\"500K\",\"can_mode\":\"normal\",\"port_type\":\"tcp\",\"port\":\"3333\",\"ap_pass\":\"@meatpi#\",\"protocol\":\"slcan\",\"ble_pass\":\"123456\",\"ble_status\":\"disable\",\"sleep_status\":\"disable\",\"sleep_volt\":\"13.1\",\"wakeup_volt\":\"13.5\",\"batt_alert\":\"disable\",\"batt_alert_ssid\":\"MeatPi\",\"batt_alert_pass\":\"TomatoSauce\",\"batt_alert_volt\":\"11.0\",\"batt_alert_protocol\":\"mqtt\",\"batt_alert_url\":\"mqtt://mqtt.eclipseprojects.io\",\"batt_alert_port\":\"1883\",\"batt_alert_topic\":\"CAR1/voltage\",\"batt_mqtt_user\":\"meatpi\",\"batt_mqtt_pass\":\"meatpi\",\"batt_alert_time\":\"1\",\"mqtt_en\":\"disable\",\"mqtt_elm327_log\":\"disable\",\"mqtt_url\":\"mqtt://127.0.0.1\",\"mqtt_port\":\"1883\",\"mqtt_user\":\"meatpi\",\"mqtt_pass\":\"meatpi\",\"mqtt_tx_topic\":\"wican/%s/can/tx\",\"mqtt_rx_topic\":\"wican/%s/can/rx\",\"mqtt_status_topic\":\"wican/%s/can/status\"}";
 static device_config_t device_config;
 TimerHandle_t xrestartTimer;
 
@@ -467,6 +467,7 @@ static esp_err_t load_canflt_handler(httpd_req_t *req)
 	if(mqtt_canflt_file != NULL)
 	{
 		const char* resp_str = (const char*)mqtt_canflt_file;
+		httpd_resp_set_type(req, "application/json");
 		httpd_resp_send(req, (const char*)resp_str, HTTPD_RESP_USE_STRLEN);
 		ESP_LOGI(TAG, "mqtt_canflt_file: %s", mqtt_canflt_file);
 	}
@@ -516,6 +517,7 @@ static esp_err_t load_pid_auto_handler(httpd_req_t *req)
     buf[filesize] = 0;
     ESP_LOGI(TAG, "auto_pid.json: %s", buf);
     
+	httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, buf, HTTPD_RESP_USE_STRLEN);
     free(buf);
 
@@ -591,6 +593,7 @@ static esp_err_t load_pid_auto_config_handler(httpd_req_t *req)
 static esp_err_t load_config_handler(httpd_req_t *req)
 {
     const char* resp_str = (const char*)device_config_file;
+	httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, (const char*)resp_str, HTTPD_RESP_USE_STRLEN);
     ESP_LOGI(TAG, "device_config_file: %s", device_config_file);
 	UBaseType_t stack_high_watermark = uxTaskGetStackHighWaterMark(NULL);
@@ -850,6 +853,7 @@ static esp_err_t check_status_handler(httpd_req_t *req)
 	cJSON_AddStringToObject(root, "mqtt_rx_topic", device_config.mqtt_rx_topic);
 	cJSON_AddStringToObject(root, "mqtt_status_topic", device_config.mqtt_status_topic);
 	cJSON_AddStringToObject(root, "device_id", device_id);
+	cJSON_AddStringToObject(root, "sta_security", device_config.sta_security);
 	
 	if(autopid_get_ecu_status())
 	{
@@ -1944,6 +1948,21 @@ static void config_server_load_cfg(char *cfg)
 
 	ESP_LOGE(TAG, "device_config.sleep_time: %s", device_config.sleep_time);
 	//*****
+
+	//*****
+	key = cJSON_GetObjectItem(root,"sta_security");
+	if(key == 0)
+	{
+		strcpy(device_config.sta_security, "wpa3");
+	}
+	else
+	{
+		strcpy(device_config.sta_security, key->valuestring);
+	}
+
+	ESP_LOGE(TAG, "device_config.sta_security: %s", device_config.wakeup_volt);
+	//*****
+
 	cJSON_Delete(root);
 	return;
 
@@ -2539,6 +2558,19 @@ char *config_server_get_mqtt_status_topic(void)
 char *config_server_get_mqtt_canflt(void)
 {
 	return mqtt_canflt_file;
+}
+
+wifi_security_t config_server_get_sta_security(void)
+{
+	if (strcmp(device_config.sta_security, "wpa2") == 0)
+	{
+		return WIFI_WPA2_PSK;
+	}
+	else if (strcmp(device_config.sta_security, "wpa3") == 0)
+	{
+		return WIFI_WPA3_PSK;
+	}
+	return WIFI_MAX;
 }
 
 void config_server_set_ble_config(uint8_t b)

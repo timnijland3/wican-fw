@@ -412,6 +412,7 @@
         <button class="tablinks" onclick="openTab(event, 'automate')"><b>Automate</b></button>
         <button class="tablinks" onclick="openTab(event, 'monitor')"><b>Monitor</b></button>
         <button class="tablinks" onclick="openTab(event, 'power_saving_tab')"><b>Power Saving</b></button>
+        <button class="tablinks" onclick="openTab(event, 'system_tab')"><b>System</b></button>
         <button class="tablinks" onclick="openTab(event, 'about_tab')"><b>About</b></button>
     </div>
 
@@ -544,6 +545,15 @@
                         <td>Password:</td>
                         <td>
                             <input type="text" id="pass_value" name="pass_value" value="TomatoSauce" disabled />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Security:</td>
+                        <td>
+                            <select id="sta_security" name="sta_security" disabled>
+                                <option value="wpa3">WPA3</option>
+                                <option value="wpa2">WPA2</option>
+                            </select>
                         </td>
                     </tr>
                 </table>
@@ -1017,7 +1027,36 @@
             </div>
 
         </div>
+        <div id="system_tab" class="tabcontent">
+            <div class="section-title">System</div>
+            <table class="form-table">
+                <tr>
+                    <td>Reboot WiCAN:</td>
+                    <td><input id="reboot_button" name="reboot_button" type="button" onclick="reboot()" value="Reboot" style="width: 15%;" /></td>
+                </tr>
+                <tr>
+                    <td>Download Configuration:</td>
+                    <td><input id="download_cfg_butt" name="download_cfg_butt" type="button" onclick="downloadCfg()" value="Download" style="width: 15%;" /></td>
+                </tr>
+                <tr>
+                    <td>Upload Configuration:</td>
+                    <td>
+                        <input type="button" onclick="document.getElementById('fileInput').click()" value="Upload" style="width: 15%;" />
+                        <input type="file" id="fileInput" accept=".json" onchange="uploadCfg()" style="display: none;" />
+                    </td>
+                </tr>
+                
+            </table>
 
+            <div class="section-title">Firmware Update</div>
+            <table class="form-table">
+                <tr>
+                    <td><input id="ota_file" name="ota_file" type="file" accept=".bin" /></td>
+                    <td><input id="ota_submit_button" type="button" value="Update" onclick="otaClick()" style="width: 15%;" /></td>
+                </tr>
+            </table>
+        </div>
+        
         <div id="about_tab" class="tabcontent">
             <div class="section-title">About</div>
             <form id="ota_form" action="/upload/ota.bin" method="post" enctype="multipart/form-data">
@@ -1045,13 +1084,6 @@
                         <td>
                             <div id="made_by"><a href="https://www.meatpi.com/"><b>meatpi.com</b></a></div>
                         </td>
-                    </tr>
-                    <tr>
-                        <td><input id="ota_file" name="ota_file" type="file" /></td>
-                        <td><input id="ota_submit_button" type="button" value="Update" onclick="otaClick()" /></td>
-                    </tr>
-                    <tr>
-                        <td><input id="reboot_button" name="reboot_button" type="button" onclick="reboot()" value="Reboot" /></td>
                     </tr>
                 </table>
             </form>
@@ -2089,10 +2121,12 @@ function loadAutoTable(jsonData) {
 		if(document.getElementById("wifi_mode").value == "AP") {
 			document.getElementById("ssid_value").disabled = true;
 			document.getElementById("pass_value").disabled = true;
+            document.getElementById("sta_security").disabled = true;
 			document.getElementById("ble_status").disabled = false;
 		} else {
 			document.getElementById("ssid_value").disabled = false;
 			document.getElementById("pass_value").disabled = false;
+            document.getElementById("sta_security").disabled = false;
 			document.getElementById("ble_status").disabled = true;
 			document.getElementById("ble_status").selectedIndex = "1";
 		}
@@ -2339,6 +2373,7 @@ function loadAutoTable(jsonData) {
 		obj["ap_ch"] = document.getElementById("ap_ch_value").value;
 		obj["sta_ssid"] = document.getElementById("ssid_value").value;
 		obj["sta_pass"] = document.getElementById("pass_value").value;
+        obj["sta_security"] = document.getElementById("sta_security").value;
 		obj["can_datarate"] = document.getElementById("can_datarate").value;
 		obj["can_mode"] = document.getElementById("can_mode").value;
 		obj["port_type"] = document.getElementById("port_type").value;
@@ -2428,6 +2463,139 @@ function loadAutoTable(jsonData) {
         xhttp.send(JSON.stringify(data));
     }
 
+    async function downloadCfg() {
+        const endpoints = [
+            '/load_config',
+            '/load_auto_pid_car_data',
+            '/load_auto_pid',
+            '/load_canflt'
+        ];
+        
+        const delay = 500; // 500ms delay between requests
+        let combinedData = {};
+        let hasErrors = false;
+        
+        try {
+            for (let i = 0; i < endpoints.length; i++) {
+                const endpoint = endpoints[i];
+                
+                try {
+                    const response = await fetch(endpoint);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    const key = endpoint.replace('/load_', '');
+                    combinedData[key] = data;
+                } catch (fetchError) {
+                    hasErrors = true;
+                }
+                
+                if (i < endpoints.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+            
+            if (Object.keys(combinedData).length === 0) {
+                throw new Error('No data was successfully fetched from any endpoint');
+            }
+            
+            const dataStr = JSON.stringify(combinedData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `config_${new Date().toISOString().split('T')[0]}.json`;
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            return true;
+            
+        } catch (error) {
+            alert('Failed to download configuration');
+            return false;
+        }
+    }
+
+    async function uploadCfg() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const endpointMap = {
+            'config': '/store_config',
+            'auto_pid': '/store_auto_data',
+            'auto_pid_car_data': '/store_car_data',
+            'canflt': '/store_canflt'
+        };
+
+        const delay = 200;
+
+        try {
+            const reader = new FileReader();
+            
+            reader.onload = async function(e) {
+                try {
+                    const jsonData = JSON.parse(e.target.result);
+                    let hasErrors = false;
+
+                    for (const [key, endpoint] of Object.entries(endpointMap)) {
+                        if (jsonData[key]) {
+                            try {
+                                const response = await fetch(endpoint, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify(jsonData[key])
+                                });
+
+                                if (!response.ok) {
+                                    hasErrors = true;
+                                    throw new Error(`HTTP error! status: ${response.status}`);
+                                }
+
+                                // Add delay before next request
+                                await new Promise(resolve => setTimeout(resolve, delay));
+
+                            } catch (fetchError) {
+                                hasErrors = true;
+                            }
+                        }
+                    }
+
+                    if (hasErrors) {
+                        alert('Some configurations failed to upload');
+                    } else {
+                        alert('Configuration uploaded successfully, Rebooting...');
+                    }
+                    
+                    // Clear the file input after upload
+                    fileInput.value = '';
+
+                } catch (parseError) {
+                    alert('Failed to parse configuration file');
+                }
+            };
+
+            reader.onerror = function() {
+                alert('Error reading file');
+            };
+
+            reader.readAsText(file);
+
+        } catch (error) {
+            alert('Upload failed');
+        }
+    }
+
 	function Load() {
 		const xhttp = new XMLHttpRequest();
 		xhttp.onload = function() {
@@ -2436,6 +2604,7 @@ function loadAutoTable(jsonData) {
 				document.getElementById("wifi_mode").selectedIndex = "1";
 				document.getElementById("ssid_value").disabled = false;
 				document.getElementById("pass_value").disabled = false;
+                document.getElementById("sta_security").disabled = false;
 			} else if(obj.wifi_mode == "AP") {
 				document.getElementById("wifi_mode").selectedIndex = "0";
 				document.getElementById("ssid_value").disabled = true;
@@ -2446,7 +2615,8 @@ function loadAutoTable(jsonData) {
 			document.getElementById("ap_ch_value").selectedIndex = ch.toString();
 			document.getElementById("ssid_value").value = obj.sta_ssid;
 			document.getElementById("pass_value").value = obj.sta_pass;
-			if(obj.can_datarate == "5K") {
+            document.getElementById("sta_security").value = obj.sta_security || "wpa3";			
+            if(obj.can_datarate == "5K") {
 				document.getElementById("can_datarate").selectedIndex = "0";
 			} else if(obj.can_datarate == "10K") {
 				document.getElementById("can_datarate").selectedIndex = "1";
