@@ -3,19 +3,19 @@
 	"init": "ATSP6;ATFCSH797;ATST96;ATFCSD300000;ATFCSM1;",
 	"pids": [
 		{
-			"pid": "2101D",
-			"pid_init": "ATSH797;ATFCSH797;ATCRA79B;",
+			"pid": "5B3",
+			"pid_init": "ATSH797;ATFCSH797;ATCRA5B3;",
 			"parameters": [
 				{
-					"name": "Hx",
-					"expression": "[B30:B31]/102.4",
+					"name": "State of Health (SoH)",
+					"expression": "(B >> 1) & 0x7F",
 					"unit": "%",
 					"class": "battery"
 				},
 				{
-					"name": "SoC",
-					"expression": "((B33*65536)+[B35:B36])/10000",
-					"unit": "%",
+					"name": "Stored Energy",
+					"expression": "F * 80",
+					"unit": "Wh",
 					"class": "battery"
 				}
 			]
